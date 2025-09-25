@@ -80,3 +80,5 @@ internal class HierarchyInterceptorInjector(
     return input.copy(interceptFunction = newInterceptFunction)
   }
 }
+
+fun log(message: String) = println("ABCD: $message")

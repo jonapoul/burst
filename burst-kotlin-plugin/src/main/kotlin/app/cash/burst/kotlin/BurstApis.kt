@@ -133,18 +133,26 @@ internal class BurstApis private constructor(
   }
 }
 
+internal interface ApiVariants<T : Any> {
+  val normal: T
+  val suspending: T?
+}
+
+internal interface SuspendingApiVariants<T : Any> : ApiVariants<T> {
+  override val suspending: T
+}
+
 /** The interceptor APIs for either suspending or non-suspending calls. */
 internal class TestInterceptorApis(
-  val interceptor: IrClassSymbol,
-  val function: IrClassSymbol,
-  val intercept: IrSimpleFunctionSymbol,
-  val testScope: IrPropertySymbol?,
-  val packageName: IrPropertySymbol,
-  val className: IrPropertySymbol,
-  val functionName: IrPropertySymbol,
-  val invoke: IrSimpleFunctionSymbol,
+  val interceptor: ApiVariants<IrClassSymbol>,
+  val function: ApiVariants<IrClassSymbol>,
+  val intercept: ApiVariants<IrSimpleFunctionSymbol>,
+  val testScope: ApiVariants<IrPropertySymbol>,
+  val packageName: ApiVariants<IrPropertySymbol>,
+  val className: ApiVariants<IrPropertySymbol>,
+  val functionName: ApiVariants<IrPropertySymbol>,
+  val invoke: ApiVariants<IrSimpleFunctionSymbol>,
 ) {
-  val interceptorType: IrType = interceptor.defaultType
   val functionType: IrType = function.defaultType
 
   fun isTestInterceptor(property: IrProperty): Boolean {

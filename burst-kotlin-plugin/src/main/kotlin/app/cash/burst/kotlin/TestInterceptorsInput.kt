@@ -80,16 +80,19 @@ internal class TestInterceptorsInputReader(
         if (declaration.overriddenSymbols.isNotEmpty()) continue
 
         if (declaration.hasAtTestInterceptor) {
-          if (burstApis.testInterceptorApis.isTestInterceptor(declaration)) {
+          val isTestInterceptor = burstApis.testInterceptorApis.isTestInterceptor(declaration)
+          val isCoroutineInterceptor = burstApis.coroutinesTestInterceptorApis?.isTestInterceptor(declaration) == true
+
+          if (isTestInterceptor) {
             // @InterceptTest val interceptor: TestInterceptor
             testInterceptors += declaration
-          } else if (
-            burstApis.coroutinesTestInterceptorApis != null &&
-            burstApis.coroutinesTestInterceptorApis.isTestInterceptor(declaration)
-          ) {
+          }
+          if (isCoroutineInterceptor) {
             // @InterceptTest val interceptor: CoroutineTestInterceptor
             coroutineTestInterceptors += declaration
-          } else {
+          }
+          if (!isTestInterceptor && !isCoroutineInterceptor) {
+            // @InterceptTest val interceptor: AnythingElse
             otherInterceptTestProperties += declaration
           }
         }

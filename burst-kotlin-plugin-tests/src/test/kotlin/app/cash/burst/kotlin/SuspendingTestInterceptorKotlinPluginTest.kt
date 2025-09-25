@@ -169,7 +169,7 @@ class SuspendingTestInterceptorKotlinPluginTest {
   }
 
   @Test
-  fun cannotUseNonCoroutineTestInterceptorWithCoroutineTestInterceptor() {
+  fun canUseNonCoroutineTestInterceptorWithCoroutineTestInterceptor() {
     val result = compile(
       SourceFile.kotlin(
         "Main.kt",
@@ -203,10 +203,7 @@ class SuspendingTestInterceptorKotlinPluginTest {
       ),
     )
 
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
-    assertThat(result.messages).contains(
-      "Main.kt:13:3 Cannot mix non-coroutine TestInterceptors with CoroutineTestInterceptors in the same test",
-    )
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
   }
 
   @Test
@@ -352,6 +349,178 @@ class SuspendingTestInterceptorKotlinPluginTest {
     assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
     assertThat(result.messages).contains(
       "Main.kt:20:3 TestInterceptor cannot intercept a coroutine test function",
+    )
+  }
+
+  @Test
+  fun interceptSuspendingAndNonSuspendingTestCasesWithACommonImplementation() {
+    val log = BurstTester(
+      packageName = "com.example",
+    ).compileAndRun(
+      SourceFile.kotlin(
+        "Main.kt",
+        """
+        package com.example
+
+        import app.cash.burst.InterceptTest
+        import app.cash.burst.TestFunction
+        import app.cash.burst.TestInterceptor
+        import app.cash.burst.coroutines.CoroutineTestFunction
+        import app.cash.burst.coroutines.CoroutineTestInterceptor
+        import kotlin.test.Test
+        import kotlinx.coroutines.test.runTest
+
+        class ImplementsBothInterceptors : TestInterceptor, CoroutineTestInterceptor {
+          override suspend fun intercept(testFunction: CoroutineTestFunction) = commonImpl { testFunction() }
+          override fun intercept(testFunction: TestFunction) = commonImpl { testFunction() }
+
+          private inline fun commonImpl(testFunction: () -> Unit) {
+            log("intercepting testFunction")
+            testFunction()
+            log("intercepted")
+          }
+        }
+
+        class ImplementsBothInterceptorsTest {
+          @InterceptTest val interceptor = ImplementsBothInterceptors()
+          @Test fun suspendingTest() = runTest { log("running suspendingTest") }
+          @Test fun nonSuspendingTest() = log("running nonSuspendingTest")
+        }
+
+        fun main(vararg args: String) {
+          val test = ImplementsBothInterceptorsTest()
+          test.suspendingTest()
+          test.nonSuspendingTest()
+        }
+        """,
+      ),
+    )
+
+    assertThat(log).containsExactly(
+      "intercepting testFunction",
+      "running suspendingTest",
+      "intercepted",
+      "intercepting testFunction",
+      "running nonSuspendingTest",
+      "intercepted",
+    )
+  }
+
+  @Test
+  fun interceptSuspendingAndNonSuspendingTestCasesWithDifferentImplementations() {
+    val log = BurstTester(
+      packageName = "com.example",
+    ).compileAndRun(
+      SourceFile.kotlin(
+        "Main.kt",
+        """
+        package com.example
+
+        import app.cash.burst.InterceptTest
+        import app.cash.burst.TestFunction
+        import app.cash.burst.TestInterceptor
+        import app.cash.burst.coroutines.CoroutineTestFunction
+        import app.cash.burst.coroutines.CoroutineTestInterceptor
+        import kotlin.test.Test
+        import kotlinx.coroutines.test.runTest
+
+        class ImplementsBothInterceptors : TestInterceptor, CoroutineTestInterceptor {
+          override suspend fun intercept(testFunction: CoroutineTestFunction) {
+            log("intercepting CoroutineTestFunction ${'$'}{testFunction.functionName}")
+            testFunction()
+            log("intercepted CoroutineTestFunction")
+          }
+
+          override fun intercept(testFunction: TestFunction) {
+            log("intercepting TestFunction ${'$'}{testFunction.functionName}")
+            testFunction()
+            log("intercepted TestFunction")
+          }
+        }
+
+        class ImplementsBothInterceptorsTest {
+          @InterceptTest val interceptor = ImplementsBothInterceptors()
+          @Test fun suspendingTest() = runTest { log("running suspendingTest") }
+          @Test fun nonSuspendingTest() = log("running nonSuspendingTest")
+        }
+
+        fun main(vararg args: String) {
+          val test = ImplementsBothInterceptorsTest()
+          test.suspendingTest()
+          test.nonSuspendingTest()
+        }
+        """,
+      ),
+    )
+
+    assertThat(log).containsExactly(
+      "intercepting CoroutineTestFunction suspendingTest",
+      "running suspendingTest",
+      "intercepted CoroutineTestFunction",
+      "intercepting TestFunction nonSuspendingTest",
+      "running nonSuspendingTest",
+      "intercepted TestFunction",
+    )
+  }
+
+  @Test
+  fun separateInterceptorsInterceptTheirRespectiveTestCases() {
+    val log = BurstTester(
+      packageName = "com.example",
+    ).compileAndRun(
+      SourceFile.kotlin(
+        "Main.kt",
+        """
+        package com.example
+
+        import app.cash.burst.InterceptTest
+        import app.cash.burst.TestFunction
+        import app.cash.burst.TestInterceptor
+        import app.cash.burst.coroutines.CoroutineTestFunction
+        import app.cash.burst.coroutines.CoroutineTestInterceptor
+        import kotlin.test.Test
+        import kotlinx.coroutines.test.runTest
+
+        class SuspendingInterceptor : CoroutineTestInterceptor {
+          override suspend fun intercept(testFunction: CoroutineTestFunction) {
+            log("intercepting ${'$'}{testFunction.functionName} from SuspendingInterceptor")
+            testFunction()
+            log("finished intercepting from SuspendingInterceptor")
+          }
+        }
+
+        class NonSuspendingInterceptor : TestInterceptor {
+          override fun intercept(testFunction: TestFunction) {
+            log("intercepting ${'$'}{testFunction.functionName} from NonSuspendingInterceptor")
+            testFunction()
+            log("finished intercepting from NonSuspendingInterceptor")
+          }
+        }
+
+        class SeparateInterceptorsTest {
+          @InterceptTest val nonSuspending = NonSuspendingInterceptor()
+          @InterceptTest val suspending = SuspendingInterceptor()
+          @Test fun suspendingTest() = runTest { log("running suspendingTest") }
+          @Test fun nonSuspendingTest() = log("running nonSuspendingTest")
+        }
+
+        fun main(vararg args: String) {
+          with(SeparateInterceptorsTest()) {
+            suspendingTest()
+            nonSuspendingTest()
+          }
+        }
+        """,
+      ),
+    )
+
+    assertThat(log).containsExactly(
+      "intercepting suspendingTest from SuspendingInterceptor",
+      "running suspendingTest",
+      "finished intercepting from SuspendingInterceptor",
+      "intercepting nonSuspendingTest from NonSuspendingInterceptor",
+      "running nonSuspendingTest",
+      "finished intercepting from NonSuspendingInterceptor",
     )
   }
 }

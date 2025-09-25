@@ -54,5 +54,7 @@ class TestInterceptorIrGenerationExtension(
     }
 
     moduleFragment.transform(transformer, null)
+
+    log(moduleFragment.dump())
   }
 }

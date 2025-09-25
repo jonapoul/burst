@@ -481,7 +481,7 @@ internal class InterceptorInjector(
           testBodyLambda = runTestCall.arguments[runTestCall.arguments.size - 1]!!,
         )
       }
-      else -> {
+      is TestFunction.NonSuspending -> {
         original.irFunctionBody(
           context = pluginContext,
         ) {

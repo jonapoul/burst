@@ -3,7 +3,9 @@
 ## [Unreleased]
 [Unreleased]: https://github.com/cashapp/burst/compare/2.10.2...HEAD
 
-Nothing yet!
+**Added**
+
+* Support implementing both TestInterceptor and CoroutineTestInterceptor on the same test class, which enables easier handling of both suspending and non-suspending test cases.
 
 
 ## [2.10.2] *(2025-09-22)*
